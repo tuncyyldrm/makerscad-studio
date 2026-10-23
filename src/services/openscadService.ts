@@ -96,13 +96,20 @@ export function parseScadParametersRegex(code: string): ScadParameter[] {
 
     // Check customizer comment annotations
     const rangeMatch = comment.match(/^\[([0-9.-]+):(?:([0-9.-]+):)?([0-9.-]+)\]$/);
-    const isEnumComment = comment.startsWith('[') && comment.endsWith(']') && !rangeMatch && !comment.toLowerCase().includes('hidden');
     const isColorComment = comment.toLowerCase().includes('[color]');
+    const isBoolEnum = /^\[\s*(?:true\s*,\s*false|false\s*,\s*true)\s*\]$/i.test(comment);
+    const isEnumComment =
+      comment.startsWith('[') &&
+      comment.endsWith(']') &&
+      !rangeMatch &&
+      !comment.toLowerCase().includes('hidden') &&
+      !isColorComment &&
+      !isBoolEnum;
 
     // CRITICAL: If rawVal is NOT a literal value and has NO customizer annotation,
     // it is a derived calculation / formula (e.g. kabartma_h = toplam_kalinlik - zemin_kalinlik;)
     // Overriding expressions via -D corrupts the math with string literals!
-    if (!isNumLiteral && !isBoolLiteral && !isStrLiteral && !isVecLiteral && !rangeMatch && !isEnumComment && !isColorComment) {
+    if (!isNumLiteral && !isBoolLiteral && !isStrLiteral && !isVecLiteral && !rangeMatch && !isEnumComment && !isColorComment && !isBoolEnum) {
       continue;
     }
 
@@ -126,6 +133,12 @@ export function parseScadParametersRegex(code: string): ScadParameter[] {
         step = decimals === 0 ? 1 : Math.pow(10, -decimals);
         max = parseFloat(rangeMatch[1]); // e.g. [10:100] min: 10, max: 100
       }
+    } else if (isColorComment || (isStrLiteral && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(rawVal.substring(1, rawVal.length - 1)))) {
+      type = 'color';
+      initial = isStrLiteral ? rawVal.substring(1, rawVal.length - 1) : rawVal;
+    } else if (isBoolLiteral || isBoolEnum) {
+      type = 'boolean';
+      initial = rawVal === 'true';
     } else if (isEnumComment) {
       type = 'enum';
       const items = comment
@@ -137,9 +150,9 @@ export function parseScadParametersRegex(code: string): ScadParameter[] {
       options = items.map(item => {
         const colonIdx = item.indexOf(':');
         if (colonIdx > 0) {
-          const val = item.substring(0, colonIdx).trim();
-          const label = item.substring(colonIdx + 1).trim();
-          return { name: label, value: isNaN(Number(val)) ? val.replace(/^["']|["']$/g, '') : Number(val) };
+          const val = item.substring(0, colonIdx).trim().replace(/^["']|["']$/g, '');
+          const label = item.substring(colonIdx + 1).trim().replace(/^["']|["']$/g, '');
+          return { name: label, value: isNaN(Number(val)) ? val : Number(val) };
         }
         const cleaned = item.replace(/^["']|["']$/g, '');
         return { name: cleaned, value: isNaN(Number(cleaned)) ? cleaned : Number(cleaned) };
@@ -150,12 +163,6 @@ export function parseScadParametersRegex(code: string): ScadParameter[] {
       } else if (isNumLiteral) {
         initial = Number(rawVal);
       }
-    } else if (isColorComment || (isStrLiteral && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(rawVal.substring(1, rawVal.length - 1)))) {
-      type = 'color';
-      initial = isStrLiteral ? rawVal.substring(1, rawVal.length - 1) : rawVal;
-    } else if (isBoolLiteral) {
-      type = 'boolean';
-      initial = rawVal === 'true';
     } else if (isNumLiteral) {
       type = 'number';
       initial = parseFloat(rawVal);

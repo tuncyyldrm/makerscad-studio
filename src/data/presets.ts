@@ -143,9 +143,9 @@ module organik_zemin() {
   },
   {
     id: 'araba-plaka',
-    name: 'Parametrik Araba Plakası (TR)',
+    name: 'Parametrik Araba Plakası (Modüler TR & Askı Delikli)',
     category: 'Signs & Plates',
-    description: 'Bambu Lab AMS 3-renkli (Siyah çerçeve, Mavi TR şeridi, Beyaz zemin) kişiselleştirilebilir araba plakası.',
+    description: 'Bambu Lab AMS 3-renkli veya modüler (ayrı basılıp yapıştırılabilir), sol üst askı delikli ve %60 anahtarlık ölçekli araba plakası.',
     colorsCount: 3,
     suggestedAmsSlots: [
       { id: 1, name: 'Siyah Çerçeve & Plaka No', colorHex: '#111111', materialType: 'PLA' },
@@ -153,105 +153,201 @@ module organik_zemin() {
       { id: 3, name: 'Beyaz Zemin & Yazılar', colorHex: '#FFFFFF', materialType: 'PLA' },
     ],
     code: `// =======================================================
-// MAKERWORLD / BAMBU LAB PARAMETRİK PLAKALIK
+// MAKERWORLD / BAMBU LAB PARAMETRİK PLAKALIK (MODÜLER TR)
 // =======================================================
 
 /* [Plaka Bilgileri] */
-plaka_no = "06 TR 06";
-isim_soyisim = "İSİM SOYİSİM";
+plaka_no        = "06 TR 06";
+isim_soyisim    = "İSİM SOYİSİM";
 
-/* [Boyut Ayarları] */
-genislik = 100; // [60:1:200]
-yukseklik = 35; // [25:1:80]
-kalinlik = 4.0; // [2:0.5:8]
-radyus = 4.0;   // [1:0.5:10]
+/* [Ölçeklendirme] */
+// Genel plaka boyutu ölçeği (%100 = 100x35mm büyük, %60 = 60x21mm anahtarlık)
+olcek_yuzdesi   = 60;   // [40:5:150]
 
-/* [Yazı Boyutları] */
-plaka_font_size = 13.0; // [8:0.5:25]
-isim_font_size = 7.0;   // [4:0.5:15]
-tr_font_size = 5.0;     // [3:0.5:10]
+/* [Yazdırma / Parça Seçimi] */
+parca_secimi    = "hepsi"; // [hepsi: Tümü (Montajlı Görünüm), plaka: Sadece Ana Plaka (TR Yuvalı), tr_modul: Sadece Mavi TR Rozeti (Yapıştırmalık)]
+
+/* [Montaj & Delik Ayarları] */
+delik_aktif     = true; // [true, false]
+delik_tipi      = "ic"; // [ic: Sol Üst Gömme Delik, kulak: Sol Üst Dış Askı Halkası, yok: Deliksiz]
+delik_capi      = 3.0;  // [2.0:0.5:5.0]
+tolerans        = 0.15; // [0.08:0.02:0.30]
+
+/* [Boyut Ayarları (Referans %100 Değerleri)] */
+genislik_ref    = 100; // [60:1:200]
+yukseklik_ref   = 35;  // [25:1:80]
+kalinlik        = 3.0; // [2.0:0.2:6.0]
+radyus_ref      = 4.0; // [1:0.5:10]
+
+/* [Yazı Boyutları (Referans %100 Değerleri)] */
+plaka_font_ref  = 13.0; // [8:0.5:25]
+isim_font_ref   = 7.0;  // [4:0.5:15]
+tr_font_ref     = 5.0;  // [3:0.5:10]
 
 /* [Renk Ayarları (AMS Filament)] */
-cerceve_rengi  = "#111111"; // [Color]
-serit_rengi    = "#003399"; // [Color]
-plaka_rengi    = "#FFFFFF"; // [Color]
-yazi_rengi     = "#111111"; // [Color]
-alt_yazi_rengi = "#FFFFFF"; // [Color]
+cerceve_rengi   = "#111111"; // [Color]
+serit_rengi     = "#003399"; // [Color]
+plaka_rengi     = "#FFFFFF"; // [Color]
+yazi_rengi      = "#111111"; // [Color]
+alt_yazi_rengi  = "#FFFFFF"; // [Color]
 
 /* [Hidden] */
 $fn = 40;
 
+// Ölçek katsayısı
+k = olcek_yuzdesi / 100;
+
+// Dinamik hesaplanan boyutlar
+genislik        = genislik_ref * k;
+yukseklik       = yukseklik_ref * k;
+radyus          = radyus_ref * k;
+plaka_font_size = plaka_font_ref * k;
+isim_font_size  = isim_font_ref * k;
+tr_font_size    = tr_font_ref * k;
+delik_mesafe    = 5.2 * k;
+
+// Kenar payları ve katman yükseklikleri
+kenar_payi      = max(0.9, 1.5 * k);
+taban_h         = 1.0;                           // 1.0 mm taşıyıcı siyah taban
+yazi_kabartma_h = 0.6;                           // 0.6 mm plaka yazı kabartması
+tr_kabartma_h   = 0.4;                           // 0.4 mm TR kabartması
+beyaz_zemin_h   = kalinlik - taban_h - yazi_kabartma_h; // Beyaz zemin kalınlığı
+mavi_serit_h    = kalinlik - taban_h - tr_kabartma_h;   // Mavi şerit kalınlığı
+
+serit_genislik  = genislik * 0.14;
+ic_w            = genislik - (kenar_payi * 2);
+ic_y            = yukseklik / 2.5;
+ic_h            = yukseklik - ic_y - kenar_payi;
+
+// Sol üst delik konumu
+delik_x         = delik_mesafe;
+delik_y         = yukseklik - delik_mesafe;
+
 // Hızlı ve pürüzsüz 2D yuvarlak dikdörtgen
 module yuvarlak_dikdortgen_2d(w, h, r) {
-    translate([r, r])
-        offset(r = r)
-            square([max(0.1, w - 2*r), max(0.1, h - 2*r)]);
+    r_akt = min(r, min(w/2, h/2));
+    translate([r_akt, r_akt])
+        offset(r = r_akt)
+            square([max(0.1, w - 2*r_akt), max(0.1, h - 2*r_akt)]);
 }
 
-// Katman kalınlıkları (Sıfır çakışma, kusursuz AMS katmanları)
-taban_h = 1.2;                           // 1.2 mm taşıyıcı siyah taban
-beyaz_zemin_h = kalinlik - taban_h - 0.8; // 2.0 mm beyaz zemin
-mavi_serit_h  = kalinlik - taban_h - 0.4; // 2.4 mm mavi şerit
-yazi_kabartma_h = 0.8;                   // 0.8 mm plaka yazı kabartması
-tr_kabartma_h   = 0.4;                   // 0.4 mm TR kabartması
+// 1. ANA ÇERÇEVE VE TAŞIYICI ALT TABAN (Siyah)
+module ana_cerceve() {
+    difference() {
+        union() {
+            // Dış ana gövde
+            linear_extrude(height = kalinlik)
+                yuvarlak_dikdortgen_2d(genislik, yukseklik, radyus);
+            
+            // Eğer dış kulakçık halkası seçildiyse
+            if (delik_aktif && delik_tipi == "kulak") {
+                kulak_r = (delik_capi + (3.0 * k)) / 2;
+                translate([0, yukseklik - radyus])
+                    difference() {
+                        cylinder(r = kulak_r, h = kalinlik, $fn = 32);
+                        translate([0, 0, -1])
+                            cylinder(d = delik_capi, h = kalinlik + 2, $fn = 32);
+                    }
+            }
+        }
+        
+        // İç havuz (taban_h seviyesinden yukarı)
+        translate([kenar_payi, ic_y, taban_h])
+            linear_extrude(height = kalinlik + 0.1)
+                yuvarlak_dikdortgen_2d(ic_w, ic_h, max(0.5, radyus - kenar_payi));
+        
+        // Sol üst gömme delik (aktifse)
+        if (delik_aktif && delik_tipi == "ic") {
+            translate([delik_x, delik_y, -1])
+                cylinder(d = delik_capi, h = kalinlik + 2, $fn = 32);
+        }
+    }
+}
 
-serit_genislik = genislik * 0.14;
-ic_w = genislik - 3.0;
-ic_h = yukseklik - (yukseklik / 2.5) - 1.5;
-ic_y = yukseklik / 2.5;
+// 2. BEYAZ PLAKA ALANI (Beyaz Zemin)
+module beyaz_plaka_alani() {
+    translate([0, 0, taban_h])
+    intersection() {
+        translate([kenar_payi, ic_y, 0])
+            linear_extrude(height = beyaz_zemin_h)
+                yuvarlak_dikdortgen_2d(ic_w, ic_h, max(0.5, radyus - kenar_payi));
+        
+        translate([serit_genislik + kenar_payi, 0, 0])
+            cube([genislik, yukseklik * 2, kalinlik]);
+    }
+}
 
-// 1. ANA ÇERÇEVE VE TAŞIYICI ALT TABAN (Siyah - Bağımsız Katı Hacim)
-color(cerceve_rengi)
-difference() {
-    linear_extrude(height = kalinlik)
-        yuvarlak_dikdortgen_2d(genislik, yukseklik, radyus);
+// 3. ANA PLAKA YAZISI (Siyah Kabartma)
+module plaka_yazisi() {
+    translate([(genislik / 2) + (serit_genislik / 2), ic_y + (ic_h / 2), taban_h + beyaz_zemin_h])
+        linear_extrude(height = yazi_kabartma_h)
+            text(plaka_no, size = plaka_font_size, halign = "center", valign = "center", font = "Arial:style=Bold");
+}
+
+// 4. ALT İSİM SOYİSİM (Beyaz Kabartma)
+module alt_isim() {
+    translate([genislik / 2, yukseklik / 5.5, kalinlik])
+        linear_extrude(height = yazi_kabartma_h)
+            text(isim_soyisim, size = isim_font_size, halign = "center", valign = "center", font = "Arial:style=Bold");
+}
+
+// 2D TR Rozet Yuvası / Parçası Profili
+module tr_rozet_2d(t = 0) {
+    offset(r = -t)
+    intersection() {
+        translate([kenar_payi, ic_y])
+            yuvarlak_dikdortgen_2d(ic_w, ic_h, max(0.5, radyus - kenar_payi));
+        translate([0, ic_y - 1])
+            square([serit_genislik + kenar_payi, ic_h + 2]);
+    }
+}
+
+// 5. MODÜLER TR ROZETİ (Mavi Zemin + Beyaz TR Yazısı)
+module tr_modulu(izole = false) {
+    tol = izole ? tolerans : 0;
+    z_taban = izole ? 0 : taban_h;
+    t_x = izole ? -kenar_payi : 0;
+    t_y = izole ? -ic_y : 0;
     
-    translate([1.5, ic_y, taban_h])
-        linear_extrude(height = kalinlik + 0.1)
-            yuvarlak_dikdortgen_2d(ic_w, ic_h, radyus - 0.5);
+    translate([t_x, t_y, z_taban]) {
+        // Mavi zemin
+        color(serit_rengi)
+        difference() {
+            linear_extrude(height = mavi_serit_h)
+                tr_rozet_2d(tol);
+            
+            // Eğer iç delik varsa TR rozetinden de delinmeli
+            if (delik_aktif && delik_tipi == "ic") {
+                translate([delik_x, delik_y, -1])
+                    cylinder(d = delik_capi + (izole ? tol : 0), h = mavi_serit_h + 2, $fn = 32);
+            }
+        }
+        
+        // Beyaz TR Yazısı
+        color(plaka_rengi)
+        translate([serit_genislik * 0.6, yukseklik / 1.9, mavi_serit_h])
+            linear_extrude(height = tr_kabartma_h)
+                text("TR", size = tr_font_size, halign = "center", valign = "center", font = "Arial:style=Bold");
+    }
 }
 
-// 2. MAVİ ŞERİT (Mavi - Altı ve üstü kapalı bağımsız 3D katı cisim)
-color(serit_rengi)
-translate([0, 0, taban_h])
-intersection() {
-    translate([1.5, ic_y, 0])
-        linear_extrude(height = mavi_serit_h)
-            yuvarlak_dikdortgen_2d(ic_w, ic_h, radyus - 0.5);
-    
-    translate([0, 0, 0])
-        cube([serit_genislik + 1.5, yukseklik * 2, kalinlik]);
+// =======================================================
+// RENDER YÖNETİMİ
+// =======================================================
+if (parca_secimi == "hepsi") {
+    color(cerceve_rengi) ana_cerceve();
+    color(plaka_rengi)   beyaz_plaka_alani();
+    color(yazi_rengi)    plaka_yazisi();
+    color(alt_yazi_rengi) alt_isim();
+    tr_modulu(izole = false);
+} else if (parca_secimi == "plaka") {
+    color(cerceve_rengi) ana_cerceve();
+    color(plaka_rengi)   beyaz_plaka_alani();
+    color(yazi_rengi)    plaka_yazisi();
+    color(alt_yazi_rengi) alt_isim();
+} else if (parca_secimi == "tr_modul") {
+    tr_modulu(izole = true);
 }
-
-// 3. MAVİ ŞERİT ÜSTÜ TR YAZISI (Beyaz Kabartma)
-color(plaka_rengi)
-translate([serit_genislik * 0.6, yukseklik / 1.9, taban_h + mavi_serit_h])
-    linear_extrude(height = tr_kabartma_h)
-        text("TR", size = tr_font_size, halign = "center", valign = "center", font = "Arial:style=Bold");
-
-// 4. BEYAZ PLAKA ALANI (Beyaz - Altı ve üstü kapalı bağımsız 3D katı cisim)
-color(plaka_rengi)
-translate([0, 0, taban_h])
-intersection() {
-    translate([1.5, ic_y, 0])
-        linear_extrude(height = beyaz_zemin_h)
-            yuvarlak_dikdortgen_2d(ic_w, ic_h, radyus - 0.5);
-    
-    translate([serit_genislik + 1.5, 0, 0])
-        cube([genislik, yukseklik * 2, kalinlik]);
-}
-
-// 5. ANA PLAKA YAZISI (Siyah Kabartma)
-color(yazi_rengi)
-translate([(genislik / 2) + (serit_genislik / 2), ic_y + (ic_h / 2), taban_h + beyaz_zemin_h])
-    linear_extrude(height = yazi_kabartma_h)
-        text(plaka_no, size = plaka_font_size, halign = "center", valign = "center", font = "Arial:style=Bold");
-
-// 6. ALT İSİM SOYİSİM (Beyaz Kabartma)
-color(alt_yazi_rengi)
-translate([genislik / 2, yukseklik / 5.5, kalinlik])
-    linear_extrude(height = 0.8)
-        text(isim_soyisim, size = isim_font_size, halign = "center", valign = "center", font = "Arial:style=Bold");
 `,
   },
   {
