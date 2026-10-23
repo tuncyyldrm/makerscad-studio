@@ -736,20 +736,37 @@ export async function parse3mf(buffer: ArrayBuffer, filename: string): Promise<I
   try {
     const zip = await JSZip.loadAsync(buffer);
 
-    // 1. Check Bambu project / model settings config to extract filament colors and plates
+    // 1. Check Bambu / Orca / Anycubic project & model settings config to extract filament colors and plates
     const filamentColors: string[] = [];
     const plates: ModelPlate[] = [];
     const objectPlateMap = new Map<string, number>();
+    const objectExtruderMap = new Map<string, number>();
+    const objectColorMap = new Map<string, string>();
 
     const projectSettingsEntry = zip.file('Metadata/project_settings.config');
     if (projectSettingsEntry) {
       try {
         const configText = await projectSettingsEntry.async('string');
-        const match = configText.match(/key="filament_colour"\s+value="([^"]+)"/i);
-        if (match) {
-          match[1].split(';').forEach(c => {
-            if (c.trim()) filamentColors.push(c.trim());
-          });
+        try {
+          const json = JSON.parse(configText);
+          if (Array.isArray(json.filament_colour)) {
+            json.filament_colour.forEach((c: any) => {
+              if (typeof c === 'string' && c.trim()) {
+                const clean = c.trim().toUpperCase();
+                filamentColors.push(clean.startsWith('#') ? clean : '#' + clean);
+              }
+            });
+          }
+        } catch (_) {
+          const match = configText.match(/key="filament_colour"\s+value="([^"]+)"/i);
+          if (match) {
+            match[1].split(';').forEach(c => {
+              if (c.trim()) {
+                const clean = c.trim().toUpperCase();
+                filamentColors.push(clean.startsWith('#') ? clean : '#' + clean);
+              }
+            });
+          }
         }
       } catch (_) {}
     }
@@ -777,6 +794,22 @@ export async function parse3mf(buffer: ArrayBuffer, filename: string): Promise<I
 
           if (partIds.length > 0) {
             plates.push({ id: plateId, name: plateName, partIds });
+          }
+        }
+
+        // Extract part extruder and color metadata
+        const partRegex = /<(?:part|object)\s+id=["']([^"']+)["'][^>]*>([\s\S]*?)<\/(?:part|object)>/gi;
+        let ptMatch;
+        while ((ptMatch = partRegex.exec(xml)) !== null) {
+          const pId = ptMatch[1];
+          const pBody = ptMatch[2];
+          const extMatch = pBody.match(/<metadata\s+key=["']extruder["']\s+value=["']([0-9]+)["']/i);
+          if (extMatch) {
+            objectExtruderMap.set(pId, parseInt(extMatch[1], 10));
+          }
+          const colMatch = pBody.match(/<metadata\s+key=["']color["']\s+value=["']#?([0-9a-fA-F]{6})["']/i);
+          if (colMatch) {
+            objectColorMap.set(pId, '#' + colMatch[1].toUpperCase());
           }
         }
       } catch (_) {}
@@ -910,10 +943,38 @@ export async function parse3mf(buffer: ArrayBuffer, filename: string): Promise<I
             const p1 = attrs.match(/\bp1=["']([0-9]+)["']/i);
 
             if (v1 && v2 && v3) {
-              let hex = paint ? '#' + paint[1].substring(0, 6).toUpperCase() : undefined;
+              let hex: string | undefined;
+
+              // 1. Decode MM painting (1C, 2C, 3C or #RRGGBB)
+              if (paint) {
+                const pVal = paint[1].trim();
+                if (/^[0-9a-fA-F]C$/i.test(pVal)) {
+                  const extNum = parseInt(pVal[0], 16);
+                  if (extNum > 0 && filamentColors[extNum - 1]) {
+                    hex = filamentColors[extNum - 1];
+                  }
+                } else if (pVal.length === 6) {
+                  hex = '#' + pVal.toUpperCase();
+                }
+              }
+
+              // 2. Decode base material / color group index
               if (!hex && p1) {
                 hex = colorMap.get(`base_${p1[1]}`) || colorMap.get(`color_${p1[1]}`);
               }
+
+              // 3. Decode object-level color or extruder from model_settings.config
+              if (!hex && objectColorMap.has(objId)) {
+                hex = objectColorMap.get(objId);
+              }
+              if (!hex && objectExtruderMap.has(objId)) {
+                const ext = objectExtruderMap.get(objId)!;
+                if (filamentColors[ext - 1]) {
+                  hex = filamentColors[ext - 1];
+                }
+              }
+
+              // 4. Fallback to filamentColors list or default palette
               if (!hex && filamentColors[colorCounter]) {
                 hex = filamentColors[colorCounter];
               }

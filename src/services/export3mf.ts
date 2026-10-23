@@ -83,8 +83,9 @@ export async function generateMakerWorld3mf(
   facesByColor.forEach((faces, colorIdx) => {
     const objectId = nextObjectId++;
     const partUuid = uuidv4();
-    const amsExtruderNum = (amsIndices[colorIdx] ?? 0) + 1; // 1-based extruder (1, 2, 3, 4)
-    const slot = amsSlots[amsExtruderNum - 1];
+    const mappedSlotIdx = amsIndices[colorIdx] ?? 0;
+    const amsExtruderNum = mappedSlotIdx + 1; // 1-based extruder (1, 2, 3, 4)
+    const slot = amsSlots[mappedSlotIdx];
     const colorHex = slot ? slot.colorHex : (hexColors[colorIdx] || '#00AE42');
     const partName = `Part_${amsExtruderNum}_${colorHex.replace('#', '')}`;
 
@@ -107,18 +108,18 @@ export async function generateMakerWorld3mf(
       .join('\n');
 
     // Generate triangle tags with both material index and paint_color attribute
-    const paintColorAttr = PAINT_COLOR_MAP[amsExtruderNum - 1] || '1C';
+    const paintColorAttr = PAINT_COLOR_MAP[mappedSlotIdx] || '1C';
     const trianglesXml = faces
       .map(face => {
         const v1 = localVertexMap.get(face.vertices[0]);
         const v2 = localVertexMap.get(face.vertices[1]);
         const v3 = localVertexMap.get(face.vertices[2]);
-        return `<triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="2" p1="${colorIdx}" paint_color="${paintColorAttr}"/>`;
+        return `<triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="2" p1="${mappedSlotIdx}" paint_color="${paintColorAttr}"/>`;
       })
       .join('\n');
 
     subObjectXmlParts.push(`
-      <object id="${objectId}" name="${partName}" type="model" p:UUID="${partUuid}" pid="2" pindex="${colorIdx}">
+      <object id="${objectId}" name="${partName}" type="model" p:UUID="${partUuid}" pid="2" pindex="${mappedSlotIdx}">
         <mesh>
           <vertices>
             ${verticesXml}
@@ -139,13 +140,27 @@ export async function generateMakerWorld3mf(
         <metadata key="source_file" value="${modelName}.scad"/>
         <metadata key="source_object_id" value="${objectId}"/>
         <metadata key="extruder" value="${amsExtruderNum}"/>
+        <metadata key="color" value="${colorHex}"/>
       </part>
     `);
   });
 
-  // Base materials XML using effective colors
-  const baseMaterialsXml = (amsSlots.length > 0 ? amsSlots.map(s => s.colorHex) : hexColors)
-    .map((hex, i) => `<base name="Color_${i + 1}" displaycolor="${hex}"/>`)
+  // Effective filament colors across all active slots
+  const effectiveFilamentColors = amsSlots.length > 0
+    ? amsSlots.map(s => s.colorHex)
+    : hexColors.length > 0 ? hexColors : ['#111111', '#003399', '#FFFFFF', '#00AE42'];
+  const effectiveFilamentTypes = amsSlots.length > 0
+    ? amsSlots.map(s => s.materialType)
+    : effectiveFilamentColors.map(() => 'PLA');
+
+  // 3MF Base materials (Core spec)
+  const baseMaterialsXml = effectiveFilamentColors
+    .map((hex, i) => `<base name="Filament_${i + 1}" displaycolor="${hex}"/>`)
+    .join('\n');
+
+  // 3MF Material Extension Color Group (Material spec)
+  const colorGroupXml = effectiveFilamentColors
+    .map(hex => `<m:color color="${hex.startsWith('#') ? hex + 'FF' : '#' + hex + 'FF'}"/>`)
     .join('\n');
 
   // Assembly Object XML (Object ID 1)
@@ -157,7 +172,7 @@ export async function generateMakerWorld3mf(
     </object>
   `;
 
-  // Complete 3D/3dmodel.model XML
+  // Complete 3D/3dmodel.model XML (Supports Anycubic Slicer Next, OrcaSlicer, Bambu Studio & PrusaSlicer)
   const model3dXml = `<?xml version="1.0" encoding="utf-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
   <metadata name="Application">MakerSCAD Studio</metadata>
@@ -169,6 +184,9 @@ export async function generateMakerWorld3mf(
     <basematerials id="2">
       ${baseMaterialsXml}
     </basematerials>
+    <m:colorgroup id="3">
+      ${colorGroupXml}
+    </m:colorgroup>
     ${subObjectXmlParts.join('\n')}
     ${assemblyObjectXml}
   </resources>
@@ -177,7 +195,7 @@ export async function generateMakerWorld3mf(
   </build>
 </model>`;
 
-  // 2. Metadata/model_settings.config (Crucial for Bambu Studio / OrcaSlicer part & extruder mapping!)
+  // 2. Metadata/model_settings.config (Anycubic Slicer Next & OrcaSlicer subpart extruder & color mapping)
   const modelSettingsConfigXml = `<?xml version="1.0" encoding="UTF-8"?>
 <config>
   <plate>
@@ -188,24 +206,22 @@ export async function generateMakerWorld3mf(
   <object id="1">
     <metadata key="name" value="${modelName}"/>
     <metadata key="extruder" value="1"/>
+    <metadata key="color" value="${effectiveFilamentColors[0] || '#111111'}"/>
     ${modelSettingsPartsXml.join('\n')}
   </object>
 </config>`;
 
-  // 3. Metadata/project_settings.config (Filament definitions for AMS)
-  const effectiveFilamentColors = amsSlots.length > 0
-    ? amsSlots.map(s => s.colorHex)
-    : hexColors.length > 0 ? hexColors : ['#00AE42'];
-  const effectiveFilamentTypes = amsSlots.length > 0
-    ? amsSlots.map(s => s.materialType)
-    : hexColors.map(() => 'PLA');
-
+  // 3. Metadata/project_settings.config (Filament definitions for Anycubic ACE Pro & Bambu AMS)
   const projectSettingsConfig = JSON.stringify(
     {
       version: '1.8.0.0',
       project_name: modelName,
       filament_colour: effectiveFilamentColors,
       filament_type: effectiveFilamentTypes,
+      filament_settings_id: effectiveFilamentTypes.map(t => `Generic ${t}`),
+      filament_vendor: effectiveFilamentTypes.map(() => 'Generic'),
+      filament_id: effectiveFilamentColors.map((_, i) => `GFL${i + 1}`),
+      filament_diameter: effectiveFilamentColors.map(() => '1.75'),
       process: {
         layer_height: '0.2',
         initial_layer_print_height: '0.2',

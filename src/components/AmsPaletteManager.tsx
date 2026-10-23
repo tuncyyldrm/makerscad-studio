@@ -9,19 +9,20 @@ interface AmsPaletteManagerProps {
   onAutoMatch: () => void;
 }
 
-const BAMBU_PRESET_COLORS = [
-  { name: 'Bambu Green', hex: '#00AE42' },
-  { name: 'Jade White', hex: '#FFFFFF' },
-  { name: 'Matte Charcoal', hex: '#2B2B2B' },
-  { name: 'Fire Engine Red', hex: '#E74C3C' },
-  { name: 'Mandarine Orange', hex: '#FF5C00' },
+const FILAMENT_PRESET_COLORS = [
+  // Anycubic & Bambu Core Colors
+  { name: 'Classic Black', hex: '#111111' },
+  { name: 'Pure White', hex: '#FFFFFF' },
+  { name: 'Anycubic Blue', hex: '#003399' },
+  { name: 'Anycubic Red', hex: '#E74C3C' },
   { name: 'Sunflower Yellow', hex: '#F1C40F' },
+  { name: 'Bambu Green', hex: '#00AE42' },
+  { name: 'Silver / Grey', hex: '#888888' },
+  { name: 'Fire Orange', hex: '#FF5C00' },
   { name: 'Cobalt Blue', hex: '#2980B9' },
   { name: 'Cyan Blue', hex: '#00D2D3' },
   { name: 'Purple Violet', hex: '#8E44AD' },
-  { name: 'Sakura Pink', hex: '#F7A8B8' },
-  { name: 'Desert Tan', hex: '#D2B48C' },
-  { name: 'Silver Silk', hex: '#BDC3C7' },
+  { name: 'Gold / Bronze', hex: '#D4AF37' },
 ];
 
 export const AmsPaletteManager: React.FC<AmsPaletteManagerProps> = ({
@@ -34,16 +35,16 @@ export const AmsPaletteManager: React.FC<AmsPaletteManagerProps> = ({
 
   return (
     <div className="flex items-center justify-between px-4 py-2.5 bg-[#1a1a1d] border-t border-white/10 text-xs">
-      {/* Left: AMS Header & Title */}
+      {/* Left: AMS & ACE Pro Header & Title */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-neutral-300 font-semibold uppercase tracking-wider">
           <Disc3 size={15} className="text-bambu-green animate-spin-slow" />
-          <span>Bambu AMS Filaments</span>
+          <span>Anycubic ACE Pro / AMS Filaments</span>
         </div>
 
         <button
           onClick={onAutoMatch}
-          title="Auto-match AMS slots to detected model colors"
+          title="Modeldeki renkleri otomatik olarak slotlara senkronize et"
           className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-neutral-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-colors"
         >
           <RefreshCw size={12} />
@@ -51,7 +52,7 @@ export const AmsPaletteManager: React.FC<AmsPaletteManagerProps> = ({
         </button>
       </div>
 
-      {/* Center: 4 AMS Slots */}
+      {/* Center: 4 AMS / ACE Slots */}
       <div className="flex items-center gap-2">
         {slots.map(slot => {
           const isSelected = activeSlotId === slot.id;
@@ -69,7 +70,7 @@ export const AmsPaletteManager: React.FC<AmsPaletteManagerProps> = ({
                 {/* Filament Color Circle with Native Color Picker */}
                 <label
                   className="relative cursor-pointer"
-                  title={`Click to pick color for Slot ${slot.id}`}
+                  title={`Slot ${slot.id} (ACE ${slot.id}) rengini değiştir`}
                   onClick={e => e.stopPropagation()}
                 >
                   <input
@@ -93,7 +94,7 @@ export const AmsPaletteManager: React.FC<AmsPaletteManagerProps> = ({
 
                 <div className="flex flex-col text-left">
                   <span className="text-[10px] font-bold text-neutral-200 leading-tight">
-                    Slot {slot.id}
+                    ACE {slot.id}
                   </span>
                   <span className="text-[9px] text-neutral-400 font-mono">
                     {slot.materialType} {slot.colorHex}
@@ -116,7 +117,7 @@ export const AmsPaletteManager: React.FC<AmsPaletteManagerProps> = ({
 
                   {/* Preset Swatches */}
                   <div className="grid grid-cols-4 gap-1.5 mb-3">
-                    {BAMBU_PRESET_COLORS.map(p => (
+                    {FILAMENT_PRESET_COLORS.map(p => (
                       <button
                         key={p.hex}
                         onClick={() => {
