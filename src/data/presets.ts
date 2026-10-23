@@ -161,7 +161,7 @@ plaka_no        = "06 TR 06";
 isim_soyisim    = "İSİM SOYİSİM";
 
 /* [Ölçeklendirme] */
-// Genel plaka boyutu ölçeği (%100 = 100x35mm büyük, %60 = 60x21mm anahtarlık)
+// En, boy ve yükseklik (Z) bu oranla birlikte orantılı büyür/küçülür (%100: 100x35x4.8mm, %60: 60x21x2.88mm)
 olcek_yuzdesi   = 60;   // [40:5:150]
 
 /* [Yazdırma / Parça Seçimi] */
@@ -176,7 +176,7 @@ tolerans        = 0.15; // [0.08:0.02:0.30]
 /* [Boyut Ayarları (Referans %100 Değerleri)] */
 genislik_ref    = 100; // [60:1:200]
 yukseklik_ref   = 35;  // [25:1:80]
-kalinlik        = 3.0; // [2.0:0.2:6.0]
+kalinlik_ref    = 2.8; // [2.0:0.5:8.0] Referans %100 Gövde Yüksekliği (Z mm)
 radyus_ref      = 4.0; // [1:0.5:10]
 
 /* [Yazı Boyutları (Referans %100 Değerleri)] */
@@ -194,23 +194,25 @@ alt_yazi_rengi  = "#FFFFFF"; // [Color]
 /* [Hidden] */
 $fn = 40;
 
-// Ölçek katsayısı
+// Ölçek katsayısı (Tüm eksenler: En, Boy, Yükseklik)
 k = olcek_yuzdesi / 100;
 
-// Dinamik hesaplanan boyutlar
+// En, Boy ve Yükseklik dinamik hesaplama
 genislik        = genislik_ref * k;
 yukseklik       = yukseklik_ref * k;
+kalinlik        = kalinlik_ref * k;
 radyus          = radyus_ref * k;
+
 plaka_font_size = plaka_font_ref * k;
 isim_font_size  = isim_font_ref * k;
 tr_font_size    = tr_font_ref * k;
 delik_mesafe    = 5.2 * k;
 
-// Kenar payları ve katman yükseklikleri
+// Kenar payları ve katman yükseklikleri (Z yüksekliği ile tam orantılı)
 kenar_payi      = max(0.9, 1.5 * k);
-taban_h         = 1.0;                           // 1.0 mm taşıyıcı siyah taban
-yazi_kabartma_h = 0.6;                           // 0.6 mm plaka yazı kabartması
-tr_kabartma_h   = 0.4;                           // 0.4 mm TR kabartması
+taban_h         = kalinlik * 0.30;       // Taban kalınlığı (Z yüksekliğinin %30'u)
+yazi_kabartma_h = kalinlik * 0.20;       // Yazı kabartması (Z yüksekliğinin %20'si)
+tr_kabartma_h   = kalinlik * 0.12;       // TR kabartması (Z yüksekliğinin %12'si)
 beyaz_zemin_h   = kalinlik - taban_h - yazi_kabartma_h; // Beyaz zemin kalınlığı
 mavi_serit_h    = kalinlik - taban_h - tr_kabartma_h;   // Mavi şerit kalınlığı
 
