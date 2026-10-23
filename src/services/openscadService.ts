@@ -150,6 +150,9 @@ export function parseScadParametersRegex(code: string): ScadParameter[] {
       } else if (isNumLiteral) {
         initial = Number(rawVal);
       }
+    } else if (isColorComment || (isStrLiteral && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(rawVal.substring(1, rawVal.length - 1)))) {
+      type = 'color';
+      initial = isStrLiteral ? rawVal.substring(1, rawVal.length - 1) : rawVal;
     } else if (isBoolLiteral) {
       type = 'boolean';
       initial = rawVal === 'true';

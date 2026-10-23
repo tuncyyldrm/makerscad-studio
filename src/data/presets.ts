@@ -142,6 +142,119 @@ module organik_zemin() {
 `,
   },
   {
+    id: 'araba-plaka',
+    name: 'Parametrik Araba Plakası (TR)',
+    category: 'Signs & Plates',
+    description: 'Bambu Lab AMS 3-renkli (Siyah çerçeve, Mavi TR şeridi, Beyaz zemin) kişiselleştirilebilir araba plakası.',
+    colorsCount: 3,
+    suggestedAmsSlots: [
+      { id: 1, name: 'Siyah Çerçeve & Plaka No', colorHex: '#111111', materialType: 'PLA' },
+      { id: 2, name: 'Mavi TR Şeridi', colorHex: '#003399', materialType: 'PLA' },
+      { id: 3, name: 'Beyaz Zemin & Yazılar', colorHex: '#FFFFFF', materialType: 'PLA' },
+    ],
+    code: `// =======================================================
+// MAKERWORLD / BAMBU LAB PARAMETRİK PLAKALIK
+// =======================================================
+
+/* [Plaka Bilgileri] */
+plaka_no = "06 TR 06";
+isim_soyisim = "İSİM SOYİSİM";
+
+/* [Boyut Ayarları] */
+genislik = 100; // [60:1:200]
+yukseklik = 35; // [25:1:80]
+kalinlik = 4.0; // [2:0.5:8]
+radyus = 4.0;   // [1:0.5:10]
+
+/* [Yazı Boyutları] */
+plaka_font_size = 13.0; // [8:0.5:25]
+isim_font_size = 7.0;   // [4:0.5:15]
+tr_font_size = 5.0;     // [3:0.5:10]
+
+/* [Renk Ayarları (AMS Filament)] */
+cerceve_rengi  = "#111111"; // [Color]
+serit_rengi    = "#003399"; // [Color]
+plaka_rengi    = "#FFFFFF"; // [Color]
+yazi_rengi     = "#111111"; // [Color]
+alt_yazi_rengi = "#FFFFFF"; // [Color]
+
+/* [Hidden] */
+$fn = 40;
+
+// Hızlı ve pürüzsüz 2D yuvarlak dikdörtgen
+module yuvarlak_dikdortgen_2d(w, h, r) {
+    translate([r, r])
+        offset(r = r)
+            square([max(0.1, w - 2*r), max(0.1, h - 2*r)]);
+}
+
+// Katman kalınlıkları (Sıfır çakışma, kusursuz AMS katmanları)
+taban_h = 1.2;                           // 1.2 mm taşıyıcı siyah taban
+beyaz_zemin_h = kalinlik - taban_h - 0.8; // 2.0 mm beyaz zemin
+mavi_serit_h  = kalinlik - taban_h - 0.4; // 2.4 mm mavi şerit
+yazi_kabartma_h = 0.8;                   // 0.8 mm plaka yazı kabartması
+tr_kabartma_h   = 0.4;                   // 0.4 mm TR kabartması
+
+serit_genislik = genislik * 0.14;
+ic_w = genislik - 3.0;
+ic_h = yukseklik - (yukseklik / 2.5) - 1.5;
+ic_y = yukseklik / 2.5;
+
+// 1. ANA ÇERÇEVE VE TAŞIYICI ALT TABAN (Siyah - Bağımsız Katı Hacim)
+color(cerceve_rengi)
+difference() {
+    linear_extrude(height = kalinlik)
+        yuvarlak_dikdortgen_2d(genislik, yukseklik, radyus);
+    
+    translate([1.5, ic_y, taban_h])
+        linear_extrude(height = kalinlik + 0.1)
+            yuvarlak_dikdortgen_2d(ic_w, ic_h, radyus - 0.5);
+}
+
+// 2. MAVİ ŞERİT (Mavi - Altı ve üstü kapalı bağımsız 3D katı cisim)
+color(serit_rengi)
+translate([0, 0, taban_h])
+intersection() {
+    translate([1.5, ic_y, 0])
+        linear_extrude(height = mavi_serit_h)
+            yuvarlak_dikdortgen_2d(ic_w, ic_h, radyus - 0.5);
+    
+    translate([0, 0, 0])
+        cube([serit_genislik + 1.5, yukseklik * 2, kalinlik]);
+}
+
+// 3. MAVİ ŞERİT ÜSTÜ TR YAZISI (Beyaz Kabartma)
+color(plaka_rengi)
+translate([serit_genislik * 0.6, yukseklik / 1.9, taban_h + mavi_serit_h])
+    linear_extrude(height = tr_kabartma_h)
+        text("TR", size = tr_font_size, halign = "center", valign = "center", font = "Arial:style=Bold");
+
+// 4. BEYAZ PLAKA ALANI (Beyaz - Altı ve üstü kapalı bağımsız 3D katı cisim)
+color(plaka_rengi)
+translate([0, 0, taban_h])
+intersection() {
+    translate([1.5, ic_y, 0])
+        linear_extrude(height = beyaz_zemin_h)
+            yuvarlak_dikdortgen_2d(ic_w, ic_h, radyus - 0.5);
+    
+    translate([serit_genislik + 1.5, 0, 0])
+        cube([genislik, yukseklik * 2, kalinlik]);
+}
+
+// 5. ANA PLAKA YAZISI (Siyah Kabartma)
+color(yazi_rengi)
+translate([(genislik / 2) + (serit_genislik / 2), ic_y + (ic_h / 2), taban_h + beyaz_zemin_h])
+    linear_extrude(height = yazi_kabartma_h)
+        text(plaka_no, size = plaka_font_size, halign = "center", valign = "center", font = "Arial:style=Bold");
+
+// 6. ALT İSİM SOYİSİM (Beyaz Kabartma)
+color(alt_yazi_rengi)
+translate([genislik / 2, yukseklik / 5.5, kalinlik])
+    linear_extrude(height = 0.8)
+        text(isim_soyisim, size = isim_font_size, halign = "center", valign = "center", font = "Arial:style=Bold");
+`,
+  },
+  {
     id: 'keychain',
     name: 'Multi-Color Keychain & Bag Tag',
     category: 'Accessories',

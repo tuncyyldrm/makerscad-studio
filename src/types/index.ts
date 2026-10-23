@@ -5,7 +5,7 @@ export interface ParameterOption {
 
 export interface ScadParameter {
   name: string;
-  type: 'number' | 'string' | 'boolean' | 'enum' | 'vector';
+  type: 'number' | 'string' | 'boolean' | 'enum' | 'vector' | 'color';
   group?: string;
   initial: any;
   min?: number;

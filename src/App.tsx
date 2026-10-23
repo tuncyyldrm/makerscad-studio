@@ -76,6 +76,23 @@ export const App: React.FC = () => {
         setElapsedMs(res.elapsedMs);
         if (res.polyhedron) {
           setModel(res.polyhedron);
+          // If in OpenSCAD mode (no imported 3D file active), auto-sync AMS slots to the model's detected colors
+          if (res.polyhedron.colors.length > 0) {
+            setAmsSlots(prev => {
+              return prev.map((slot, idx) => {
+                const c = res.polyhedron!.colors[idx];
+                if (!c) return slot;
+                const r = Math.round(c[0] * 255);
+                const g = Math.round(c[1] * 255);
+                const b = Math.round(c[2] * 255);
+                const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
+                return {
+                  ...slot,
+                  colorHex: hex,
+                };
+              });
+            });
+          }
         } else {
           setError(res.stderr || 'No 3D geometry produced');
         }
@@ -436,8 +453,10 @@ color(yazi_rengi) {
     // Also check if there is a corresponding color parameter in the customizer
     const colorParams = parameterSet.parameters.filter(
       p =>
+        p.type === 'color' ||
         p.name.toLowerCase().includes('color') ||
         p.name.toLowerCase().includes('colour') ||
+        p.name.toLowerCase().includes('renk') ||
         (typeof p.initial === 'string' && p.initial.startsWith('#'))
     );
     const matchingParam = colorParams[slotId - 1];

@@ -113,8 +113,10 @@ export const CustomizerPanel: React.FC<CustomizerPanelProps> = ({
 
                       // Check if parameter represents a color
                       const isColor =
+                        param.type === 'color' ||
                         param.name.toLowerCase().includes('color') ||
                         param.name.toLowerCase().includes('colour') ||
+                        param.name.toLowerCase().includes('renk') ||
                         (typeof val === 'string' && /^#([0-9A-Fa-f]{3}){1,2}$/.test(val.trim())) ||
                         (param.description && param.description.toLowerCase().includes('color'));
 
