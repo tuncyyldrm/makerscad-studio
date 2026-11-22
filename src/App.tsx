@@ -39,11 +39,12 @@ export const App: React.FC = () => {
   const [fontModalOpen, setFontModalOpen] = useState<boolean>(false);
   const customFontsRef = useRef<CustomFont[]>([]);
 
-  // Default to Split View so users immediately see Code + Parameters + 3D Preview
-  const [viewMode, setViewMode] = useState<'customizer' | 'editor' | 'split'>('split');
+  // Default to Customizer View so users immediately see Parameters + 3D Preview
+  const [viewMode, setViewMode] = useState<'customizer' | 'editor' | 'split'>('customizer');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   const renderTimeoutRef = useRef<number | null>(null);
+  const renderSeqRef = useRef<number>(0);
 
   // Extract parameters whenever code changes (instant synchronous parsing)
   useEffect(() => {
@@ -67,12 +68,19 @@ export const App: React.FC = () => {
       varsToPass: Record<string, any>,
       overrideFonts?: CustomFont[]
     ) => {
+      const seq = ++renderSeqRef.current;
       setRendering(true);
       setError(undefined);
 
       try {
         const fontsToUse = overrideFonts ?? customFontsRef.current;
         const res = await renderModel(codeToRender, varsToPass, fontsToUse);
+
+        // Discard superseded stale renders to keep UI silky smooth
+        if (seq !== renderSeqRef.current) {
+          return;
+        }
+
         setElapsedMs(res.elapsedMs);
         if (res.polyhedron) {
           setModel(res.polyhedron);
@@ -174,7 +182,7 @@ export const App: React.FC = () => {
 
     renderTimeoutRef.current = window.setTimeout(() => {
       executeRender(code, updated);
-    }, 250);
+    }, 300);
   };
 
   // Switch Preset

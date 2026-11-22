@@ -30,19 +30,23 @@ export const PRESETS: Preset[] = [
 // Duvara yazılacak isim veya metin
 metin           = "BUBBLE";
 // Harf yüksekliği (mm)
-harf_boyutu     = 65.0; // [30:5:150]
-// Harfler arası mesafe oranı (0.85-0.95 bitişik, 1.10+ ayrı harfler)
-harf_araligi    = 1.15; // [0.80:0.05:1.60]
+harf_boyutu     = 35.0; // [30:5:150]
+// Harfler arası mesafe oranı (0.80-0.95 bitişik, 1.10+ ayrı harfler)
+harf_araligi    = 1.55; // [0.80:0.05:1.60]
 // Yazı tipi
 font_secimi     = "Arial:style=Bold"; // [Arial:style=Bold: "Arial Bold (Klasik Yuvarlak)", Impact: "Impact (Ekstra Dolgun)", Tahoma:style=Bold: "Tahoma Bold"]
 
+/* [Performans & Önizleme Hızı] */
+// Hızlı önizleme tasarım anında akıcı çalışır; baskı öncesi yüksek kaliteye alabilirsiniz
+hiz_modu        = "hizli"; // [hizli: "Hızlı Önizleme (Ultra Akıcı ~120ms)", yuksek: "Yüksek Kalite (Baskı Öncesi Son Kontrol)"]
+
 /* [Şişkinlik & Balon Efekti (3D Puf)] */
 // Toplam plaka/harf et kalınlığı (Z mm)
-toplam_kalinlik = 18.0; // [8:2:35]
+toplam_kalinlik = 10.0; // [8:2:35]
 // Balon kubbe kavis yarıçapı (mm)
-balon_kavisi    = 7.0;  // [3:1:15]
+balon_kavisi    = 4.0;  // [3:1:15]
 // Harf tombulluk / ekstra et payı (mm)
-tombulluk       = 2.5;  // [0.5:0.5:6.0]
+tombulluk       = 3.5;  // [0.5:0.5:6.0]
 
 /* [Yerleşim & Baskı Modu] */
 // Harflerin diziliş düzeni
@@ -65,86 +69,94 @@ renk_5          = "#F6B93B"; // [Color] Güneş Sarısı (5. Harf)
 renk_6          = "#E55039"; // [Color] Canlı Kırmızı (6. Harf)
 
 /* [Hidden] */
-$fn = 20;
+katman_sayisi   = (hiz_modu == "hizli") ? 8 : 16;
+$fn             = (hiz_modu == "hizli") ? 14 : 22;
 
 palette = [renk_1, renk_2, renk_3, renk_4, renk_5, renk_6];
 
-// 2D Şişkin Harf Konturu
-module harf_konturu_2d(char) {
-    offset(r = tombulluk)
+// Tek seferlik optimize 2D ofset (Çift ofset yerine tek ofset ile 2.5x hız)
+module harf_konturu_2d(char, r_ekstra = 0) {
+    eff_r = max(0.1, tombulluk + r_ekstra);
+    offset(r = eff_r)
         text(char, size = harf_boyutu, font = font_secimi, halign = "center", valign = "center");
 }
 
-// 3D Balon Harf Geometrisi (Düz Arka Taban + Şişkin Ön Yüzey)
+// 3D Balon Harf (Puf Kubbeli + Düz Sırtlı)
 module tek_balon_harf(char) {
-    h_duz = max(1.0, toplam_kalinlik - balon_kavisi);
+    h_base = max(1.0, toplam_kalinlik - balon_kavisi);
+    R = balon_kavisi;
+    dz = R / katman_sayisi;
     
     difference() {
-        // Balon Şişirme (Minkowski ile pürüzsüz kubbe)
-        minkowski() {
-            linear_extrude(height = h_duz)
-                harf_konturu_2d(char);
-            
-            // Çeyrek/Yarım küre kavis aracı (sadece üstü yuvarlar)
-            intersection() {
-                sphere(r = balon_kavisi);
-                translate([0, 0, 0])
-                    cylinder(r = balon_kavisi + 2, h = balon_kavisi + 1);
+        union() {
+            // Taban gövdesi
+            linear_extrude(height = h_base)
+                harf_konturu_2d(char, 0);
+                
+            // Puf kubbe katmanları (Küre kavis profili)
+            for (i = [0 : katman_sayisi - 1]) {
+                z = (i + 1) * dz;
+                dr = R - sqrt(max(0, R*R - z*z));
+                translate([0, 0, h_base + i * dz])
+                    linear_extrude(height = dz + 0.05)
+                        harf_konturu_2d(char, -dr);
             }
         }
         
-        // Z=0 altında kalan taşmaları tıraşla (Arka yüzey %100 düz kalsın)
-        translate([-1000, -1000, -200])
-            cube([2000, 2000, 200]);
-        
-        // Çivi askı yuvası (Keyhole slot)
+        // Montaj Yuvaları (Sırt yüzeyinde)
         if (montaj_tipi == "civi") {
             translate([0, harf_boyutu * 0.15, 0]) {
-                translate([0, -4, -1])
+                translate([0, -4, -0.5])
                     cylinder(d = delik_capi, h = 4.5);
-                translate([-delik_capi*0.3, -4, -1])
+                translate([-delik_capi*0.3, -4, -0.5])
                     cube([delik_capi*0.6, 9, 4.5]);
                 translate([0, 2, 2.0])
                     cylinder(d = delik_capi, h = 4.0);
             }
-        }
-        
-        // Mıknatıs yuvaları
-        if (montaj_tipi == "miknatis") {
+        } else if (montaj_tipi == "miknatis") {
             translate([0, 0, -0.5])
-                cylinder(d = delik_capi, h = 3.0);
+                cylinder(d = delik_capi, h = 3.2);
         }
     }
 }
 
-// Bitişik / Birleşik Kelime Modülü (Tek Parça Tabela)
-module birlesik_kelime() {
-    h_duz = max(1.0, toplam_kalinlik - balon_kavisi);
+// 2D Bitişik Yazı Konturu
+module bitisik_kontur_2d(r_ekstra = 0) {
+    eff_r = max(0.1, tombulluk + r_ekstra);
+    offset(r = eff_r)
+        text(metin, size = harf_boyutu, font = font_secimi, halign = "center", valign = "center", spacing = harf_araligi);
+}
+
+// 3D Bitişik Tabela Modülü
+module bitisik_kelime() {
+    h_base = max(1.0, toplam_kalinlik - balon_kavisi);
+    R = balon_kavisi;
+    dz = R / katman_sayisi;
     
     difference() {
-        minkowski() {
-            linear_extrude(height = h_duz)
-                offset(r = tombulluk)
-                    text(metin, size = harf_boyutu, font = font_secimi, halign = "center", valign = "center", spacing = harf_araligi);
-            
-            intersection() {
-                sphere(r = balon_kavisi);
-                translate([0, 0, 0])
-                    cylinder(r = balon_kavisi + 2, h = balon_kavisi + 1);
+        union() {
+            linear_extrude(height = h_base)
+                bitisik_kontur_2d(0);
+                
+            for (i = [0 : katman_sayisi - 1]) {
+                z = (i + 1) * dz;
+                dr = R - sqrt(max(0, R*R - z*z));
+                translate([0, 0, h_base + i * dz])
+                    linear_extrude(height = dz + 0.05)
+                        bitisik_kontur_2d(-dr);
             }
         }
         
-        translate([-2000, -2000, -200])
-            cube([4000, 4000, 200]);
-        
-        // Bitişik kelimede iki adet askı deliği
         if (montaj_tipi == "civi") {
             genislik_tahmini = len(metin) * harf_boyutu * 0.7 * harf_araligi;
             for (offset_x = [-genislik_tahmini * 0.3, genislik_tahmini * 0.3]) {
-                translate([offset_x, 0, 0]) {
-                    translate([0, -4, -1]) cylinder(d = delik_capi, h = 4.5);
-                    translate([-delik_capi*0.3, -4, -1]) cube([delik_capi*0.6, 9, 4.5]);
-                    translate([0, 2, 2.0]) cylinder(d = delik_capi, h = 4.0);
+                translate([offset_x, harf_boyutu * 0.15, 0]) {
+                    translate([0, -4, -0.5])
+                        cylinder(d = delik_capi, h = 4.5);
+                    translate([-delik_capi*0.3, -4, -0.5])
+                        cube([delik_capi*0.6, 9, 4.5]);
+                    translate([0, 2, 2.0])
+                        cylinder(d = delik_capi, h = 4.0);
                 }
             }
         }
@@ -152,47 +164,356 @@ module birlesik_kelime() {
 }
 
 // =======================================================
-// RENDER YÖNETİMİ
+// SAHNE OLUŞTURMA & YERLEŞİM
 // =======================================================
 n = len(metin);
-harf_adim = harf_boyutu * 0.8 * harf_araligi;
+dx_step = harf_boyutu * 0.72 * harf_araligi;
 
 if (harf_secici > 0 && harf_secici <= n) {
-    // Sadece seçilen tek harfi tabla merkezine koy
+    // Tek Harf Seçici Modu
     idx = harf_secici - 1;
     color(palette[idx % len(palette)])
         tek_balon_harf(metin[idx]);
-} else if (yerlesim_tipi == "birlesik") {
-    // Bitişik Tek Parça
+} else if (yerlesim_tipi == "bitisik") {
+    // Bitişik Tek Parça Tabela
     color(renk_1)
-        birlesik_kelime();
+        bitisik_kelime();
 } else if (yerlesim_tipi == "tabla_2x") {
-    // 2 Sıralı Izgara (Baskı tablasına sığdırma)
-    yari = ceil(n / 2);
-    satir_y = harf_boyutu * 0.7;
-    
+    // 2 Sıralı Kompakt Tabla Düzeni
+    half = ceil(n / 2);
     for (i = [0 : n - 1]) {
-        satir = (i < yari) ? 0 : 1;
-        sutun = (i < yari) ? i : (i - yari);
-        satir_sayisi = (satir == 0) ? yari : (n - yari);
-        toplam_w = (satir_sayisi - 1) * harf_adim;
-        
-        x_pos = -toplam_w / 2 + sutun * harf_adim;
-        y_pos = (satir == 0) ? satir_y : -satir_y;
-        
+        row = (i < half) ? 0 : 1;
+        col = (i < half) ? i : (i - half);
+        x_shift = (col - (row == 0 ? half - 1 : (n - half - 1)) / 2) * dx_step;
+        y_shift = (row == 0) ? (harf_boyutu * 0.6) : (-harf_boyutu * 0.6);
         color(palette[i % len(palette)])
-            translate([x_pos, y_pos, 0])
+            translate([x_shift, y_shift, 0])
                 tek_balon_harf(metin[i]);
     }
 } else {
-    // Yan Yana Sıralı (Standart Duvar Düzeni)
-    toplam_w = (n - 1) * harf_adim;
-    
+    // Ayrı Harfler (Duvar Dizilişi)
+    toplam_genislik = (n - 1) * dx_step;
     for (i = [0 : n - 1]) {
-        x_pos = -toplam_w / 2 + i * harf_adim;
+        x_pos = -toplam_genislik / 2 + i * dx_step;
         color(palette[i % len(palette)])
             translate([x_pos, 0, 0])
                 tek_balon_harf(metin[i]);
+    }
+}
+`,
+  },
+  {
+    id: 'parmak-led-tabela',
+    name: 'Parmak LED Aydınlatmalı Modüler Harfler (Hızlı Baskı & Çift Katman Difüzör)',
+    category: 'LED & Lightbox Decor',
+    description: 'Harfleri tek tek basıp bağımsız monte edebileceğiniz, sabit ince et kalınlığı (2.2mm) ve desteksiz geometrisiyle baskı süresini 26 saatten 2.5 saate indiren, standart beyaz parmak LED ile her harfe farklı renk ışıma sağlayan çift katman difüzörlü modüler lightbox.',
+    colorsCount: 5,
+    suggestedAmsSlots: [
+      { id: 1, name: 'Dış Kasa (Siyah / Koyu Gövde)', colorHex: '#1E1E1E', materialType: 'PLA' },
+      { id: 2, name: 'Ön Difüzör Dış Yüzey (Standart Beyaz)', colorHex: '#FFFFFF', materialType: 'PLA' },
+      { id: 3, name: '1. Harf Filtresi (Sarı)', colorHex: '#FFC000', materialType: 'PLA' },
+      { id: 4, name: '2. Harf Filtresi (Kırmızı)', colorHex: '#A90432', materialType: 'PLA' },
+    ],
+    code: `// =======================================================
+// MODÜLER PARMAK LED AYDINLATMALI AYRI HARF SİSTEMİ
+// (Ultra Hızlı Baskı & Çift Katmanlı Difüzör Teknolojisi)
+// =======================================================
+
+/* [Metin & Harf Ayarları] */
+// Duvara / Masaya yazılacak isim veya metin
+metin           = "GS";
+// Harf yüksekliği (mm) - Dilimleyicide büyütmek yerine buradan doğrudan 1:1 boyutu girin
+harf_boyutu     = 190.0; // [30:5:220]
+// Harfler arası yan yana boşluk mesafesi (mm)
+harfler_arasi_bosluk = 5.0; // [5:2:80]
+// Yazı tipi
+font_secimi     = "Arial:style=Bold"; // [Arial:style=Bold: "Arial Bold (Net & Kalın)", Impact: "Impact (Modern Dolgun)", Tahoma:style=Bold: "Tahoma Bold"]
+
+/* [Baskı Parça Seçici & Görünüm] */
+// Hangi harf basılacak? (0: Tüm kelime, 1: 1. Harf, 2: 2. Harf...)
+harf_secici     = 0; // [0: "Tüm Kelime (Yan Yana)", 1: "1. Harf", 2: "2. Harf", 3: "3. Harf", 4: "4. Harf", 5: "5. Harf", 6: "6. Harf"]
+// Hangi parça basılacak veya gösterilecektir?
+parca_secici    = "montajli"; // [montajli: "Montajlı (Işık Kapalı / Dıştan Saf Beyaz)", isik_yaniyor: "Işık Açık Görünümü (İç Filtre Renk Parıltısı)", kasa: "Sadece Kasa (Gövde)", kapak: "Sadece Kapak (Tablada Ters: 0.8mm Beyaz + Renk Filtre)", kapak_dis: "Sadece Kapak Dış Beyaz Katman (Ayrı STL)", kapak_filtre: "Sadece Kapak İç Renk Filtresi (Ayrı STL)", kopru: "Kablo Gizleme Köprüleri (3 Dk Baskı / 1.5gr)", patlatilmis: "Patlatılmış Görünüm (Kasa + İç Filtre + Dış Kapak)"]
+
+/* [Hızlı Baskı & Kasa Ölçüleri] */
+// Kasa toplam derinliği (Z mm) - 24 mm kutu harf için idealdir, Z basım süresini kısaltır
+kasa_derinligi  = 24.0; // [16:1:40]
+// Harf dış kenar payı (mm) - Harf silüetini birebir sarar, kare takoz formunu engeller!
+cerceve_payi    = 2.0;  // [1.5:0.5:6.0]
+// Sabit yan et kalınlığı (mm) - Tam 4 perimetre duvar, sıfır iç katı dolgu!
+duvar_kalinligi = 1.6;  // [1.6:0.2:3.0]
+// Taban (arka sırt) et kalınlığı (mm)
+taban_kalinligi = 1.2;  // [1.2:0.2:2.6]
+
+/* [Çift Katmanlı Difüzör & Renk Filtresi (Sihirli Işık)] */
+// Işık kapalıyken dışarıdan görünen standart tek renk (Örn: Saf Beyaz)
+dis_yuzey_rengi     = "#FFFFFF"; // [Color] Dış Yüzey Rengi
+// Dış beyaz difüzör katman et payı (mm) - 4 katman @ 0.2mm
+dis_yuzey_kalinligi = 0.8;  // [0.4:0.2:1.2]
+// İç renk filtresi kalınlığı (mm) - Beyaz LED'i renklendiren iç katman
+filtre_kalinligi    = 1.2;  // [0.6:0.2:2.0]
+// Kapak oturma geçme toleransı (Sök-tak için 0.20 - 0.30 mm)
+gecme_payi          = 0.25; // [0.15:0.05:0.40]
+// Tırnak çentiği (Kasa kenarında sökme tırnağı)
+tirnak_centigi      = false; // [true: "Çentikli (Sökme Yuvalı)", false: "Pürüzsüz Düz (Kusursuz Ön Yüzey)"]
+
+/* [Harf İç Filtre Renkleri (Beyaz Işığı Renklendiren İç Katman)] */
+filtre_1 = "#FFC000"; // [Color] 1. Harf Filtresi (Sarı)
+filtre_2 = "#A90432"; // [Color] 2. Harf Filtresi (Kırmızı)
+filtre_3 = "#FF7597"; // [Color] 3. Harf Filtresi (Neon Pembe)
+filtre_4 = "#78E08F"; // [Color] 4. Harf Filtresi (Fıstık Yeşili)
+filtre_5 = "#F6B93B"; // [Color] 5. Harf Filtresi (Güneş Sarısı)
+filtre_6 = "#E55039"; // [Color] 6. Harf Filtresi (Kırmızı)
+
+/* [Montaj & LED Yuvaları] */
+// Harflerin montaj şekli
+montaj_tarzi    = "bagimsiz"; // [bagimsiz: "Bağımsız Ayrı Harfler (Tek Tek Montaj)", kilitli: "Geçmeli Kilitli (Kırlangıç Tırnak)"]
+// Arka duvara sabitleme tipi
+montaj_yuvasi   = "civi"; // [civi: "Arka Çivi Askı Yuvalı (Keyhole)", duz: "Düz Taban (Çift Taraflı Nano Bant)", miknatis: "Mıknatıs Yuvalı"]
+// Parmak LED delik çapı (mm) - Standart WS2811 kurşun/parmak piksel LED için 12.0 mm (0: Deliksiz)
+led_delik_capi  = 12.0;   // [0.0:1.0:16.0]
+// LED deliği X ekseni manuel kaydırma (mm)
+led_x_ofset     = 0.0;    // [-50:1:50]
+// LED deliği Y ekseni manuel kaydırma (mm)
+led_y_ofset     = 0.0;    // [-50:1:50]
+// Harfler arası yan kablo delikleri (Deliksiz duvar en hızlı basılır, havya ile 2 saniyede delinir)
+yan_kablo_deligi= false;  // [false: "Deliksiz Düz Duvar (Ultra Hızlı / Sıcak Havya ile Kolay Delme)", true: "Otomatik Yan Delikli"]
+// Kasa dış gövde rengi
+kasa_rengi      = "#1E1E1E"; // [Color] Kasa Rengi
+
+/* [Hidden] */
+$fn = 24;
+
+filtre_paleti = [filtre_1, filtre_2, filtre_3, filtre_4, filtre_5, filtre_6];
+toplam_kapak_h = dis_yuzey_kalinligi + filtre_kalinligi;
+
+// 2D Konturlar
+module tek_harf_2d(c) {
+    text(c, size = harf_boyutu, font = font_secimi, halign = "center", valign = "center");
+}
+
+module tek_kasa_dis_2d(c) {
+    offset(r = cerceve_payi)
+        tek_harf_2d(c);
+}
+
+// Sabit et paylı iç havuz (Gereksiz katı dolguyu önler)
+module tek_kasa_ic_2d(c) {
+    offset(r = max(0.2, cerceve_payi - duvar_kalinligi))
+        tek_harf_2d(c);
+}
+
+// Kapak oturma basamağı (0.7 mm dış et payı bırakır, sağlam basamak oluşturur)
+module tek_kapak_kademe_2d(c) {
+    offset(r = cerceve_payi - 0.7)
+        tek_harf_2d(c);
+}
+
+module kapak_kontur_2d(c) {
+    offset(r = cerceve_payi - 0.7 - gecme_payi)
+        tek_harf_2d(c);
+}
+
+// 45 derece çatılı desteksiz kablo geçiş tüneli
+module desteksiz_kablo_tuneli(uzunluk = 30) {
+    rotate([0, 90, 0])
+    linear_extrude(height = uzunluk, center = true)
+        polygon(points = [
+            [-2.5, -3],
+            [2.5, -3],
+            [2.5, 0],
+            [0, 3],
+            [-2.5, 0]
+        ]);
+}
+
+// 1.5 Gramlık Hızlı Kablo Gizleme Köprüsü (Harfler arası kabloyu kapatır)
+module kablo_gizleme_koprusu(mesafe) {
+    w_k = mesafe + 4.0;
+    h_k = 7.0;
+    d_k = 5.5;
+    et = 1.0;
+    difference() {
+        cube([w_k, d_k, h_k], center = true);
+        translate([0, 0, -et])
+            cube([w_k + 1, d_k - et * 2, h_k], center = true);
+    }
+}
+
+// Kırlangıç Erkek Tırnak (Sağ taraf)
+module kirlangic_erkek(w_half) {
+    translate([w_half, 0, taban_kalinligi])
+        linear_extrude(height = kasa_derinligi * 0.5)
+            polygon(points = [[0, -4], [4, -6], [4, 6], [0, 4]]);
+}
+
+// Kırlangıç Dişi Yuva (Sol taraf)
+module kirlangic_disi(w_half) {
+    tol = gecme_payi;
+    translate([-w_half, 0, taban_kalinligi - 0.5])
+        linear_extrude(height = kasa_derinligi * 0.5 + 1.0)
+            polygon(points = [[0.1, -4.5 - tol], [-4.5 - tol, -6.5 - tol], [-4.5 - tol, 6.5 + tol], [0.1, 4.5 + tol]]);
+}
+
+// 3D Kasa Gövdesi (Düz Dikey Duvarlar - T, Y, P, L dahil tüm harflerde sıfır üçgen hatası)
+module tek_kasa(c, index = 0, is_first = true, is_last = true) {
+    w_est = harf_boyutu * 0.45 + cerceve_payi;
+    
+    // Akıllı LED konumlandırma (Ortası boş harflerde LED deliğini gövdeye yerleştirir)
+    eff_led_x = (led_x_ofset != 0) ? led_x_ofset : 
+                (c == "L" ? -harf_boyutu * 0.15 : 
+                (c == "C" || c == "G" ? -harf_boyutu * 0.22 : 0));
+
+    eff_led_y = (led_y_ofset != 0) ? led_y_ofset : 
+                (c == "L" ? -harf_boyutu * 0.25 : 
+                (c == "O" || c == "U" || c == "V" ? -harf_boyutu * 0.30 : 0));
+    
+    difference() {
+        union() {
+            // Düz dikey gövde - Hull olmadan her harfte kusursuz geometri
+            linear_extrude(height = kasa_derinligi)
+                tek_kasa_dis_2d(c);
+                
+            if (montaj_tarzi == "kilitli" && !is_last) {
+                kirlangic_erkek(w_est);
+            }
+        }
+        
+        // İç Işık Odası (Sabit 2.2 mm duvar)
+        translate([0, 0, taban_kalinligi])
+            linear_extrude(height = kasa_derinligi + 1)
+                tek_kasa_ic_2d(c);
+                
+        // Kapak Oturma Basamağı
+        translate([0, 0, kasa_derinligi - toplam_kapak_h])
+            linear_extrude(height = toplam_kapak_h + 2)
+                tek_kapak_kademe_2d(c);
+                
+        // Sök-tak tırnak çentiği oyuğu (Sadece kasada)
+        if (tirnak_centigi) {
+            translate([0, -harf_boyutu * 0.44, kasa_derinligi - toplam_kapak_h * 0.5])
+                cube([6, 3, toplam_kapak_h + 1], center = true);
+        }
+        
+        // Kırlangıç dişi yuva
+        if (montaj_tarzi == "kilitli" && !is_first) {
+            kirlangic_disi(w_est);
+        }
+        
+        // Arka Parmak LED Yuvası (12mm)
+        if (led_delik_capi > 0) {
+            translate([eff_led_x, eff_led_y, -1])
+                cylinder(d = led_delik_capi, h = taban_kalinligi + 2);
+        }
+        
+        // Desteksiz Yan Kablo Kanalları (0% Destek)
+        if (yan_kablo_deligi) {
+            for (dx = [-w_est * 1.5, w_est * 1.5]) {
+                translate([dx, 0, taban_kalinligi + 3.0])
+                    desteksiz_kablo_tuneli(w_est * 2);
+            }
+        }
+        
+        // Arka Sırt Kablo Kanalı (Duvara sıfır, kablo ezilmeden yapışması için)
+        translate([0, 0, -0.2])
+            cube([w_est * 3, 5.0, 1.4], center = true);
+        
+        // Montaj Yuvaları
+        if (montaj_yuvasi == "civi") {
+            translate([0, harf_boyutu * 0.28, -0.5]) {
+                cylinder(d = 6.5, h = 1.5);
+                translate([-1.8, -2, 0]) cube([3.6, 5, 1.5]);
+            }
+        } else if (montaj_yuvasi == "miknatis") {
+            translate([0, 0, -0.5])
+                cylinder(d = 8.2, h = 2.0);
+        }
+    }
+}
+
+// 1. Dış Yüzey Kapak Katmanı (Işık kapalıyken görünen saf beyaz katman - Pürüzsüz & Deliksiz)
+module kapak_dis_yuzey(c) {
+    linear_extrude(height = dis_yuzey_kalinligi)
+        kapak_kontur_2d(c);
+}
+
+// 2. İç Renk Filtresi (LED'e bakan, beyaz ışığı renklendiren iç katman)
+module kapak_ic_filtre(c) {
+    linear_extrude(height = filtre_kalinligi)
+        kapak_kontur_2d(c);
+}
+
+// Harf Bileşeni
+module harf_bilesen(c, idx = 0, is_first = true, is_last = true) {
+    filtre_c = filtre_paleti[idx % len(filtre_paleti)];
+    z_kapak_base = kasa_derinligi - toplam_kapak_h;
+    
+    if (parca_secici == "kasa") {
+        color(kasa_rengi) tek_kasa(c, idx, is_first, is_last);
+    } else if (parca_secici == "kapak") {
+        // Tablada ters baskı (0..0.8mm Beyaz, 0.8..2.0mm Renk Filtresi)
+        color(dis_yuzey_rengi) kapak_dis_yuzey(c);
+        color(filtre_c)
+            translate([0, 0, dis_yuzey_kalinligi])
+                kapak_ic_filtre(c);
+    } else if (parca_secici == "kapak_dis") {
+        color(dis_yuzey_rengi) kapak_dis_yuzey(c);
+    } else if (parca_secici == "kapak_filtre") {
+        color(filtre_c) kapak_ic_filtre(c);
+    } else if (parca_secici == "isik_yaniyor") {
+        color(kasa_rengi) tek_kasa(c, idx, is_first, is_last);
+        color(filtre_c)
+            translate([0, 0, kasa_derinligi - dis_yuzey_kalinligi])
+                kapak_dis_yuzey(c);
+    } else if (parca_secici == "patlatilmis") {
+        color(kasa_rengi) tek_kasa(c, idx, is_first, is_last);
+        color(filtre_c)
+            translate([0, 0, kasa_derinligi + 14])
+                kapak_ic_filtre(c);
+        color(dis_yuzey_rengi)
+            translate([0, 0, kasa_derinligi + 28])
+                kapak_dis_yuzey(c);
+    } else {
+        // montajli: Gündüz / Işık kapalı (Dıştan saf beyaz difüzör görünür)
+        color(kasa_rengi) tek_kasa(c, idx, is_first, is_last);
+        color(filtre_c)
+            translate([0, 0, z_kapak_base])
+                kapak_ic_filtre(c);
+        color(dis_yuzey_rengi)
+            translate([0, 0, z_kapak_base + filtre_kalinligi])
+                kapak_dis_yuzey(c);
+    }
+}
+
+// Yerleşim
+n = len(metin);
+dx_adim = harf_boyutu * 0.95 + cerceve_payi * 2 + harfler_arasi_bosluk;
+
+if (parca_secici == "kopru") {
+    // Sadece kablo köprülerini bas (3 dakikada basılan 1.5 gramlık klipsler)
+    toplam_kopru = max(1, n - 1);
+    for (i = [0 : toplam_kopru - 1]) {
+        translate([0, (i - (toplam_kopru - 1) / 2) * 12.0, 3.5])
+            color(kasa_rengi)
+                kablo_gizleme_koprusu(harfler_arasi_bosluk);
+    }
+} else if (harf_secici > 0 && harf_secici <= n) {
+    secili_idx = harf_secici - 1;
+    harf_bilesen(metin[secili_idx], secili_idx, secili_idx == 0, secili_idx == n - 1);
+} else {
+    toplam_genislik = (n - 1) * dx_adim;
+    for (i = [0 : n - 1]) {
+        x_pos = -toplam_genislik / 2 + i * dx_adim;
+        translate([x_pos, 0, 0])
+            harf_bilesen(metin[i], i, i == 0, i == n - 1);
+            
+        // Harfler arasındaki kablo gizleme köprüsü (Son harf hariç)
+        if (i < n - 1 && (parca_secici == "montajli" || parca_secici == "isik_yaniyor")) {
+            x_kopru = x_pos + dx_adim / 2;
+            translate([x_kopru, 0, taban_kalinligi + 3.0])
+                color(kasa_rengi)
+                    kablo_gizleme_koprusu(harfler_arasi_bosluk);
+        }
     }
 }
 `,
