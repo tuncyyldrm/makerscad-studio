@@ -10,6 +10,194 @@ export interface Preset {
 
 export const PRESETS: Preset[] = [
   {
+    id: 'bubble-letters',
+    name: '3D Balon Harf Duvar Yazısı (Bubble Letters Wall Art)',
+    category: 'Home & Wall Decor',
+    description: 'MakerWorld & Anycubic ACE Pro / AMS uyumlu, düz sırtlı (çift taraflı bant / çivi askılı) puf balon duvar harfleri ve isimliği.',
+    colorsCount: 6,
+    suggestedAmsSlots: [
+      { id: 1, name: 'Turkuaz (1. Harf)', colorHex: '#00D2D3', materialType: 'PLA' },
+      { id: 2, name: 'Mercan Turuncu (2. Harf)', colorHex: '#FF5C00', materialType: 'PLA' },
+      { id: 3, name: 'Fıstık Yeşili (3. Harf)', colorHex: '#78E08F', materialType: 'PLA' },
+      { id: 4, name: 'Güneş Sarısı (4. Harf)', colorHex: '#F6B93B', materialType: 'PLA' },
+    ],
+    code: `// =======================================================
+// MAKERWORLD / ANYCUBIC BUBBLE LETTERS WALL ART
+// 3D Şişkin Balon Duvar Yazısı (Duvar Süsü / İsimlik)
+// =======================================================
+
+/* [Metin & Yazı Ayarları] */
+// Duvara yazılacak isim veya metin
+metin           = "BUBBLE";
+// Harf yüksekliği (mm)
+harf_boyutu     = 65.0; // [30:5:150]
+// Harfler arası mesafe oranı (0.85-0.95 bitişik, 1.10+ ayrı harfler)
+harf_araligi    = 1.15; // [0.80:0.05:1.60]
+// Yazı tipi
+font_secimi     = "Arial:style=Bold"; // [Arial:style=Bold: "Arial Bold (Klasik Yuvarlak)", Impact: "Impact (Ekstra Dolgun)", Tahoma:style=Bold: "Tahoma Bold"]
+
+/* [Şişkinlik & Balon Efekti (3D Puf)] */
+// Toplam plaka/harf et kalınlığı (Z mm)
+toplam_kalinlik = 18.0; // [8:2:35]
+// Balon kubbe kavis yarıçapı (mm)
+balon_kavisi    = 7.0;  // [3:1:15]
+// Harf tombulluk / ekstra et payı (mm)
+tombulluk       = 2.5;  // [0.5:0.5:6.0]
+
+/* [Yerleşim & Baskı Modu] */
+// Harflerin diziliş düzeni
+yerlesim_tipi   = "ayri"; // [ayri: "Ayrı Harfler (Duvar Düzeni)", bitisik: "Bitişik Kelime (Tek Parça Tabela)", tabla_2x: "2 Sıralı Izgara (Baskı Tablası)"]
+// Tek bir harfi seçip basmak için (0: Tümü)
+harf_secici     = 0; // [0: "Tüm Kelime", 1: "1. Harf", 2: "2. Harf", 3: "3. Harf", 4: "4. Harf", 5: "5. Harf", 6: "6. Harf", 7: "7. Harf", 8: "8. Harf"]
+
+/* [Montaj & Duvar Askı Yuvası] */
+// Duvara sabitleme tipi
+montaj_tipi     = "duz"; // [duz: "Düz Taban (Çift Taraflı / Nano Bant)", civi: "Çivi / Vida Askı Yuvası (Gömme Keyhole)", miknatis: "Mıknatıs Yuvalı (Buzdolabı / Metal)"]
+// Çivi başı veya mıknatıs çapı (mm)
+delik_capi      = 6.5;   // [4.0:0.5:12.0]
+
+/* [Renkler (Anycubic ACE Pro / Bambu AMS 4-Renk & Çok Renkli)] */
+renk_1          = "#00D2D3"; // [Color] Turkuaz (1. Harf)
+renk_2          = "#FF5C00"; // [Color] Mercan Turuncu (2. Harf)
+renk_3          = "#78E08F"; // [Color] Fıstık Yeşili (3. Harf)
+renk_4          = "#38ADA9"; // [Color] Okyanus Mavisi (4. Harf)
+renk_5          = "#F6B93B"; // [Color] Güneş Sarısı (5. Harf)
+renk_6          = "#E55039"; // [Color] Canlı Kırmızı (6. Harf)
+
+/* [Hidden] */
+$fn = 20;
+
+palette = [renk_1, renk_2, renk_3, renk_4, renk_5, renk_6];
+
+// 2D Şişkin Harf Konturu
+module harf_konturu_2d(char) {
+    offset(r = tombulluk)
+        text(char, size = harf_boyutu, font = font_secimi, halign = "center", valign = "center");
+}
+
+// 3D Balon Harf Geometrisi (Düz Arka Taban + Şişkin Ön Yüzey)
+module tek_balon_harf(char) {
+    h_duz = max(1.0, toplam_kalinlik - balon_kavisi);
+    
+    difference() {
+        // Balon Şişirme (Minkowski ile pürüzsüz kubbe)
+        minkowski() {
+            linear_extrude(height = h_duz)
+                harf_konturu_2d(char);
+            
+            // Çeyrek/Yarım küre kavis aracı (sadece üstü yuvarlar)
+            intersection() {
+                sphere(r = balon_kavisi);
+                translate([0, 0, 0])
+                    cylinder(r = balon_kavisi + 2, h = balon_kavisi + 1);
+            }
+        }
+        
+        // Z=0 altında kalan taşmaları tıraşla (Arka yüzey %100 düz kalsın)
+        translate([-1000, -1000, -200])
+            cube([2000, 2000, 200]);
+        
+        // Çivi askı yuvası (Keyhole slot)
+        if (montaj_tipi == "civi") {
+            translate([0, harf_boyutu * 0.15, 0]) {
+                translate([0, -4, -1])
+                    cylinder(d = delik_capi, h = 4.5);
+                translate([-delik_capi*0.3, -4, -1])
+                    cube([delik_capi*0.6, 9, 4.5]);
+                translate([0, 2, 2.0])
+                    cylinder(d = delik_capi, h = 4.0);
+            }
+        }
+        
+        // Mıknatıs yuvaları
+        if (montaj_tipi == "miknatis") {
+            translate([0, 0, -0.5])
+                cylinder(d = delik_capi, h = 3.0);
+        }
+    }
+}
+
+// Bitişik / Birleşik Kelime Modülü (Tek Parça Tabela)
+module birlesik_kelime() {
+    h_duz = max(1.0, toplam_kalinlik - balon_kavisi);
+    
+    difference() {
+        minkowski() {
+            linear_extrude(height = h_duz)
+                offset(r = tombulluk)
+                    text(metin, size = harf_boyutu, font = font_secimi, halign = "center", valign = "center", spacing = harf_araligi);
+            
+            intersection() {
+                sphere(r = balon_kavisi);
+                translate([0, 0, 0])
+                    cylinder(r = balon_kavisi + 2, h = balon_kavisi + 1);
+            }
+        }
+        
+        translate([-2000, -2000, -200])
+            cube([4000, 4000, 200]);
+        
+        // Bitişik kelimede iki adet askı deliği
+        if (montaj_tipi == "civi") {
+            genislik_tahmini = len(metin) * harf_boyutu * 0.7 * harf_araligi;
+            for (offset_x = [-genislik_tahmini * 0.3, genislik_tahmini * 0.3]) {
+                translate([offset_x, 0, 0]) {
+                    translate([0, -4, -1]) cylinder(d = delik_capi, h = 4.5);
+                    translate([-delik_capi*0.3, -4, -1]) cube([delik_capi*0.6, 9, 4.5]);
+                    translate([0, 2, 2.0]) cylinder(d = delik_capi, h = 4.0);
+                }
+            }
+        }
+    }
+}
+
+// =======================================================
+// RENDER YÖNETİMİ
+// =======================================================
+n = len(metin);
+harf_adim = harf_boyutu * 0.8 * harf_araligi;
+
+if (harf_secici > 0 && harf_secici <= n) {
+    // Sadece seçilen tek harfi tabla merkezine koy
+    idx = harf_secici - 1;
+    color(palette[idx % len(palette)])
+        tek_balon_harf(metin[idx]);
+} else if (yerlesim_tipi == "birlesik") {
+    // Bitişik Tek Parça
+    color(renk_1)
+        birlesik_kelime();
+} else if (yerlesim_tipi == "tabla_2x") {
+    // 2 Sıralı Izgara (Baskı tablasına sığdırma)
+    yari = ceil(n / 2);
+    satir_y = harf_boyutu * 0.7;
+    
+    for (i = [0 : n - 1]) {
+        satir = (i < yari) ? 0 : 1;
+        sutun = (i < yari) ? i : (i - yari);
+        satir_sayisi = (satir == 0) ? yari : (n - yari);
+        toplam_w = (satir_sayisi - 1) * harf_adim;
+        
+        x_pos = -toplam_w / 2 + sutun * harf_adim;
+        y_pos = (satir == 0) ? satir_y : -satir_y;
+        
+        color(palette[i % len(palette)])
+            translate([x_pos, y_pos, 0])
+                tek_balon_harf(metin[i]);
+    }
+} else {
+    // Yan Yana Sıralı (Standart Duvar Düzeni)
+    toplam_w = (n - 1) * harf_adim;
+    
+    for (i = [0 : n - 1]) {
+        x_pos = -toplam_w / 2 + i * harf_adim;
+        color(palette[i % len(palette)])
+            translate([x_pos, 0, 0])
+                tek_balon_harf(metin[i]);
+    }
+}
+`,
+  },
+  {
     id: 'cumhuriyet-atas',
     name: 'Yaşasın Cumhuriyet Ataş Kitap Ayracı',
     category: 'Bookmarks & Clips',
